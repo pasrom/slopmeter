@@ -177,8 +177,8 @@ function getCalendarGrid(startDate: string, endDate: string) {
 }
 
 function getSectionLayout(weekCount: number) {
-  const cellSize = 14;
-  const gap = 4;
+  const cellSize = 11;
+  const gap = 2;
   const leftLabelWidth = 34;
   const rightPadding = 20;
   const metricCaptionValueGap = 14;
@@ -296,6 +296,8 @@ function drawHeatmapSection(
   for (let i = 0; i < 7; i += 1) {
     const dayY = y + layout.gridTop + i * (layout.cellSize + layout.gap) + layout.cellSize / 2;
 
+    const dayLabel = i === 0 || i === 6 ? daysOfWeekMonday[i] : "";
+
     svg = svg.text(
       {
         x: x + layout.leftLabelWidth - 6,
@@ -306,7 +308,7 @@ function drawHeatmapSection(
         "dominant-baseline": "middle",
         "font-family": "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
       },
-      daysOfWeekMonday[i],
+      dayLabel,
     );
   }
 
@@ -454,8 +456,8 @@ export function renderUsageHeatmapsSvg({
   const allDays = getAllDays(startDate, endDate);
   const grid = getCalendarGrid(startDate, endDate);
   const layout = getSectionLayout(grid.weeks.length);
-  const outerPadding = 12;
-  const sectionGap = 28;
+  const outerPadding = 18;
+  const sectionGap = 40;
 
   const width = outerPadding * 2 + layout.width;
   const height =
