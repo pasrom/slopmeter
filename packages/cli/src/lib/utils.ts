@@ -163,16 +163,78 @@ export function getTopModel(
   };
 }
 
+function isConsecutiveDay(prevDate: string, currDate: string): boolean {
+  const prev = new Date(`${prevDate}T00:00:00`);
+  const curr = new Date(`${currDate}T00:00:00`);
+  const diff = curr.getTime() - prev.getTime();
+
+  return diff === 24 * 60 * 60 * 1000;
+}
+
+export function computeLongestStreak(daily: DailyUsage[]): number {
+  if (daily.length === 0) {
+    return 0;
+  }
+
+  let longest = 1;
+  let running = 1;
+
+  for (let i = 1; i < daily.length; i += 1) {
+    if (isConsecutiveDay(daily[i - 1].date, daily[i].date)) {
+      running += 1;
+      if (running > longest) {
+        longest = running;
+      }
+    } else {
+      running = 1;
+    }
+  }
+
+  return longest;
+}
+
+export function computeCurrentStreak(daily: DailyUsage[], end: Date): number {
+  if (daily.length === 0) {
+    return 0;
+  }
+
+  const endDateStr = formatLocalDate(end);
+  const lastEntry = daily[daily.length - 1];
+
+  // If the last active day isn't the end date, check if it's consecutive
+  if (lastEntry.date !== endDateStr) {
+    if (!isConsecutiveDay(lastEntry.date, endDateStr)) {
+      return 0;
+    }
+  }
+
+  let current = 1;
+
+  for (let i = daily.length - 2; i >= 0; i -= 1) {
+    if (!isConsecutiveDay(daily[i].date, daily[i + 1].date)) {
+      break;
+    }
+    current += 1;
+  }
+
+  return current;
+}
+
 export function getProviderInsights(
   modelTotals: Map<string, ModelTokenTotals>,
   recentModelTotals: Map<string, ModelTokenTotals>,
-): Insights | undefined {
+  daily: DailyUsage[],
+  end: Date,
+): Insights {
   const mostUsedModel = getTopModel(modelTotals);
   const recentMostUsedModel = getTopModel(recentModelTotals);
 
-  if (!mostUsedModel && !recentMostUsedModel) {
-    return undefined;
-  }
-
-  return { mostUsedModel, recentMostUsedModel };
+  return {
+    mostUsedModel,
+    recentMostUsedModel,
+    streaks: {
+      longest: computeLongestStreak(daily),
+      current: computeCurrentStreak(daily, end),
+    },
+  };
 }

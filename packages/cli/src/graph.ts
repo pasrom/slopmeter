@@ -31,7 +31,6 @@ interface SectionLayout {
 interface DrawHeatmapSectionOptions {
   x: number;
   y: number;
-  allDays: string[];
   grid: CalendarGrid;
   layout: SectionLayout;
   daily: DailyUsage[];
@@ -249,46 +248,11 @@ function getSectionLayout(weekCount: number) {
   };
 }
 
-function computeStreaks(allDays: string[], valueByDate: Map<string, number>) {
-  let longestStreak = 0;
-  let running = 0;
-
-  for (const day of allDays) {
-    const active = (valueByDate.get(day) ?? 0) > 0;
-
-    if (active) {
-      running += 1;
-
-      if (running > longestStreak) {
-        longestStreak = running;
-      }
-    } else {
-      running = 0;
-    }
-  }
-
-  let currentStreak = 0;
-
-  for (let i = allDays.length - 1; i >= 0; i -= 1) {
-    const day = allDays[i];
-    const active = (valueByDate.get(day) ?? 0) > 0;
-
-    if (!active) {
-      break;
-    }
-
-    currentStreak += 1;
-  }
-
-  return { longestStreak, currentStreak };
-}
-
 function drawHeatmapSection(
   svg: SVGBuilderInstance,
   {
     x,
     y,
-    allDays,
     grid,
     layout,
     daily,
@@ -313,7 +277,8 @@ function drawHeatmapSection(
   const totalTokensLabel = formatTokenTotal(totalTokens);
   const totalInputLabel = formatTokenTotal(totalInputTokens);
   const totalOutputLabel = formatTokenTotal(totalOutputTokens);
-  const { longestStreak, currentStreak } = computeStreaks(allDays, valueByDate);
+  const longestStreak = insights?.streaks.longest ?? 0;
+  const currentStreak = insights?.streaks.current ?? 0;
 
   svg = svg.text(
     {
@@ -621,7 +586,6 @@ export function renderUsageHeatmapsSvg({
   endDate,
   sections,
 }: RenderUsageHeatmapsSvgOptions) {
-  const allDays = getAllDays(startDate, endDate);
   const grid = getCalendarGrid(startDate, endDate);
   const layout = getSectionLayout(grid.weeks.length);
   const outerPadding = 18;
@@ -645,7 +609,6 @@ export function renderUsageHeatmapsSvg({
     svg = drawHeatmapSection(svg, {
       x: outerPadding,
       y: sectionY,
-      allDays,
       grid,
       layout,
       daily: section.daily,

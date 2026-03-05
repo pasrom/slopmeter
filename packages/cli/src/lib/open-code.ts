@@ -126,9 +126,11 @@ export async function loadOpenCodeRows(
     }
   }
 
+  const daily = totalsToRows(totals);
+
   return {
     provider: "opencode",
-    daily: totalsToRows(totals),
-    insights: getProviderInsights(modelTotals, recentModelTotals),
+    daily,
+    insights: getProviderInsights(modelTotals, recentModelTotals, daily, end),
   };
 }

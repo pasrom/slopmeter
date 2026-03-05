@@ -5,13 +5,12 @@ import ora, { type Ora } from "ora";
 import ow from "ow";
 import sharp from "sharp";
 import { heatmapThemes, renderUsageHeatmapsSvg } from "./graph";
-import type { DailyUsage, Insights } from "./interfaces";
+import type { JsonExportPayload } from "./interfaces";
 import { formatLocalDate } from "./lib/utils";
 import {
   aggregateUsage,
   providerIds,
   providerStatusLabel,
-  type ProviderId,
 } from "./providers";
 
 type OutputFormat = "png" | "svg" | "json";
@@ -28,22 +27,6 @@ const PNG_BASE_WIDTH = 1000;
 const PNG_SCALE = 4;
 const PNG_RENDER_WIDTH = PNG_BASE_WIDTH * PNG_SCALE;
 const JSON_EXPORT_VERSION = "2026-03-03";
-
-interface JsonExportProvider {
-  id: ProviderId;
-  title: string;
-  colors: string[];
-  daily: DailyUsage[];
-  insights?: Insights;
-}
-
-interface JsonExportPayload {
-  version: typeof JSON_EXPORT_VERSION;
-  startDate: string;
-  endDate: string;
-  weekStart: "monday";
-  providers: JsonExportProvider[];
-}
 
 const HELP_TEXT = `codegraph-usage
 
@@ -195,17 +178,7 @@ async function main() {
       );
     }
 
-    const exportProviders = providersToRender.map((provider) => {
-      const data = rowsByProvider[provider]!;
-
-      return {
-        id: provider,
-        daily: data.daily,
-        title: heatmapThemes[provider].title,
-        colors: heatmapThemes[provider].colors,
-        insights: data.insights,
-      };
-    });
+    const exportProviders = providersToRender.map((provider) => rowsByProvider[provider]!);
 
     const outputPath = resolve(
       values.output ?? `./heatmap-last-year.${format}`,
@@ -217,9 +190,8 @@ async function main() {
 
       const payload: JsonExportPayload = {
         version: JSON_EXPORT_VERSION,
-        startDate: formatLocalDate(start),
-        endDate: formatLocalDate(end),
-        weekStart: "monday",
+        start: formatLocalDate(start),
+        end: formatLocalDate(end),
         providers: exportProviders,
       };
 
@@ -231,7 +203,12 @@ async function main() {
       const svg = renderUsageHeatmapsSvg({
         startDate: start,
         endDate: end,
-        sections: exportProviders,
+        sections: exportProviders.map(({ provider, daily, insights }) => ({
+          daily,
+          insights,
+          title: heatmapThemes[provider].title,
+          colors: heatmapThemes[provider].colors,
+        })),
       });
 
       spinner.text = "Writing output file...";

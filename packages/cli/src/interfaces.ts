@@ -5,7 +5,7 @@ export interface UsageSummary {
 }
 
 export interface DailyUsage {
-  date: string;
+  date: Date;
   input: number;
   output: number;
   cache: {
@@ -33,4 +33,15 @@ export interface ModelUsage {
 export interface Insights {
   mostUsedModel?: ModelUsage;
   recentMostUsedModel?: ModelUsage;
+  streaks: {
+    longest: number;
+    current: number;
+  };
+}
+
+export interface JsonExportPayload {
+  version: string;
+  start: string;
+  end: string;
+  providers: UsageSummary[];
 }

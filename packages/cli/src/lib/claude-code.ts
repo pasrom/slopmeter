@@ -213,9 +213,11 @@ export async function loadClaudeRows(
     }
   }
 
+  const daily = totalsToRows(totals);
+
   return {
     provider: "claude",
-    daily: totalsToRows(totals),
-    insights: getProviderInsights(modelTotals, recentModelTotals),
+    daily,
+    insights: getProviderInsights(modelTotals, recentModelTotals, daily, endDate),
   };
 }

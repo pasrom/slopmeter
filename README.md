@@ -7,6 +7,7 @@ TypeScript CLI that generates usage heatmaps for Claude Code, Codex, and Open Co
 ```text
 packages/
   cli/
+  registry/
 tooling/
   typescript-config/
 ```
@@ -79,10 +80,25 @@ Model names are normalized to remove a trailing date suffix like `-20251101`.
 - Use `--format json` (or an `.json` output filename) to export data for interactive rendering.
 - Export includes fixed `version: "2026-03-03"`.
 - Each provider includes:
-  - `title` and `colors` (same theme used by the image renderer)
+  - `title` and `colors`
   - `daily` rows with `date`, `input`, `output`, `cache`, `total`
   - `daily[].breakdown` per-model usage for that day, sorted by `tokens.total` (includes `input` and `output`)
   - `insights` (`mostUsedModel`, `recentMostUsedModel`) when available
+
+## Shadcn registry
+
+- Registry source lives in `packages/registry/registry.json`.
+- Build the registry with `bun run --cwd packages/registry registry:build`.
+- Installable item payload is `packages/registry/public/r/codegraph-heatmap.json`.
+- Component source is `packages/registry/registry/codegraph/codegraph-heatmap.tsx`.
+
+```bash
+# from this repo root in a consumer project
+npx shadcn@latest add ./packages/registry/public/r/codegraph-heatmap.json
+```
+
+The component accepts the JSON produced by `codegraph-usage --format json` and renders provider heatmaps with per-day model tooltips.
+Provider heatmap shades are defined in the registry item via `cssVars.theme`.
 
 ## Provider/data behavior
 

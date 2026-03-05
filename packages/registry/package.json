@@ -1,0 +1,11 @@
+{
+  "name": "codegraph-registry",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "registry:build": "shadcn build"
+  },
+  "devDependencies": {
+    "shadcn": "^3.5.0"
+  }
+}

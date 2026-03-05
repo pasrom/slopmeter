@@ -263,9 +263,11 @@ export async function loadCodexRows(
     }
   }
 
+  const daily = totalsToRows(totals);
+
   return {
     provider: "codex",
-    daily: totalsToRows(totals),
-    insights: getProviderInsights(modelTotals, recentModelTotals),
+    daily,
+    insights: getProviderInsights(modelTotals, recentModelTotals, daily, end),
   };
 }

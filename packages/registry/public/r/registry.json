@@ -1,0 +1,40 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry.json",
+  "name": "codegraph",
+  "homepage": "https://github.com/ryoppippi/codegraph",
+  "items": [
+    {
+      "name": "codegraph-heatmap",
+      "type": "registry:component",
+      "title": "Codegraph Heatmaps",
+      "description": "Interactive heatmap component for codegraph JSON exports.",
+      "registryDependencies": ["utils", "tooltip"],
+      "dependencies": ["class-variance-authority"],
+      "cssVars": {
+        "theme": {
+          "heatmap-claude-0": "#fff7ed",
+          "heatmap-claude-1": "#fed7aa",
+          "heatmap-claude-2": "#fdba74",
+          "heatmap-claude-3": "#f97316",
+          "heatmap-claude-4": "#c2410c",
+          "heatmap-codex-0": "#e0e7ff",
+          "heatmap-codex-1": "#a5b4fc",
+          "heatmap-codex-2": "#818cf8",
+          "heatmap-codex-3": "#4f46e5",
+          "heatmap-codex-4": "#312e81",
+          "heatmap-opencode-0": "#f5f5f5",
+          "heatmap-opencode-1": "#d4d4d4",
+          "heatmap-opencode-2": "#a3a3a3",
+          "heatmap-opencode-3": "#525252",
+          "heatmap-opencode-4": "#171717"
+        }
+      },
+      "files": [
+        {
+          "path": "registry/codegraph/codegraph-heatmap.tsx",
+          "type": "registry:component"
+        }
+      ]
+    }
+  ]
+}
