@@ -5,6 +5,7 @@ export interface UsageSummary {
 }
 
 export interface DailyUsage {
+  date: string;
   input: number;
   output: number;
   cache: {

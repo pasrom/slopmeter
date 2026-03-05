@@ -282,8 +282,8 @@ function drawHeatmapSection(
   { x, y, allDays, grid, layout, daily, insights, title, colors }: DrawHeatmapSectionOptions,
 ) {
   const valueByDate = new Map<string, number>();
-  for (let i = 0; i < daily.length; i++) {
-    valueByDate.set(allDays[i], daily[i].total);
+  for (const row of daily) {
+    valueByDate.set(row.date, row.total);
   }
   const maxValue = Math.max(...daily.map((row) => row.total), 0);
   const rightEdge = x + layout.width - 8;

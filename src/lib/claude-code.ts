@@ -25,10 +25,10 @@ interface ClaudeUsagePayload {
 }
 
 interface ClaudeRawLogEntry {
-  timestamp: string;
+  timestamp?: string;
   requestId?: string;
-  message: {
-    usage: ClaudeUsagePayload;
+  message?: {
+    usage?: ClaudeUsagePayload;
     model?: string;
     id?: string;
   };
@@ -73,7 +73,11 @@ function getClaudeProjectDirs() {
   return dirs;
 }
 
-function parseClaudeLogEntry(entry: ClaudeRawLogEntry): ClaudeLogEntry {
+function parseClaudeLogEntry(entry: ClaudeRawLogEntry): ClaudeLogEntry | null {
+  if (!entry.timestamp || !entry.message?.usage) {
+    return null;
+  }
+
   return {
     timestamp: entry.timestamp,
     usage: entry.message.usage,
@@ -100,10 +104,18 @@ function createClaudeTokenTotals(usage: ClaudeUsagePayload): DailyTokenTotals {
 async function parseClaudeFile(filePath: string) {
   const content = await readFile(filePath, "utf8");
 
-  return content
-    .split(/\r?\n/)
-    .filter((line) => line.trim() !== "")
-    .map((line) => parseClaudeLogEntry(JSON.parse(line) as ClaudeRawLogEntry));
+  const entries: ClaudeLogEntry[] = [];
+  const lines = content.split(/\r?\n/).filter((line) => line.trim() !== "");
+
+  for (const line of lines) {
+    const parsed = parseClaudeLogEntry(JSON.parse(line) as ClaudeRawLogEntry);
+
+    if (parsed) {
+      entries.push(parsed);
+    }
+  }
+
+  return entries;
 }
 
 async function parseClaudeFiles() {

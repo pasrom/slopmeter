@@ -69,7 +69,8 @@ export function totalsToRows(
 ): DailyUsage[] {
   return [...totals.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([, { tokens, models }]) => ({
+    .map(([date, { tokens, models }]) => ({
+      date,
       input: tokens.input,
       output: tokens.output,
       cache: { input: tokens.cache.input, output: tokens.cache.output },

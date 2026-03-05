@@ -45,6 +45,7 @@ codegraph-usage -o ./out/heatmap.svg
 # Output format
 codegraph-usage --format png
 codegraph-usage --format svg
+codegraph-usage --format json
 codegraph-usage -f svg
 
 # Provider filters (optional)
@@ -71,8 +72,18 @@ Model names are normalized to remove a trailing date suffix like `-20251101`.
 ## Format behavior
 
 - Default format is PNG.
-- If `--format` is omitted, format is inferred from `--output` extension (`.png` or `.svg`).
+- If `--format` is omitted, format is inferred from `--output` extension (`.png`, `.svg`, or `.json`).
 - If neither provides a format, PNG is used.
+
+## JSON export
+
+- Use `--format json` (or an `.json` output filename) to export data for interactive rendering.
+- Export includes fixed `version: "2026-03-03"`.
+- Each provider includes:
+  - `title` and `colors` (same theme used by the image renderer)
+  - `daily` rows with `date`, `input`, `output`, `cache`, `total`
+  - `daily[].breakdown` per-model usage for that day, sorted by `tokens.total` (includes `input` and `output`)
+  - `insights` (`mostUsedModel`, `recentMostUsedModel`) when available
 
 ## Provider/data behavior
 
