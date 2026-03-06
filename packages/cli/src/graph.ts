@@ -111,6 +111,7 @@ function formatTokenTotal(value: number) {
         .toFixed(precision)
         .replace(/\.0+$/, "")
         .replace(/(\.\d*[1-9])0+$/, "$1");
+
       return `${compact}${unit.suffix}`;
     }
   }
@@ -190,6 +191,7 @@ function defaultColourMap(value: number, max: number, colorCount: number) {
   }
 
   const index = Math.ceil((value / max) * (colorCount - 1));
+
   return Math.min(Math.max(index, 0), colorCount - 1);
 }
 
@@ -262,6 +264,7 @@ function drawHeatmapSection(
   }: DrawHeatmapSectionOptions,
 ) {
   const valueByDate = new Map<string, number>();
+
   for (const row of daily) {
     valueByDate.set(formatLocalDate(row.date), row.total);
   }
@@ -399,6 +402,7 @@ function drawHeatmapSection(
     if (monthLabel) {
       const monthX =
         x + layout.leftLabelWidth + weekIndex * (layout.cellSize + layout.gap);
+
       svg = svg.text(
         {
           x: monthX,
@@ -415,6 +419,7 @@ function drawHeatmapSection(
 
     for (let dayIndex = 0; dayIndex < week.length; dayIndex += 1) {
       const day = week[dayIndex];
+
       if (!day) {
         continue;
       }
@@ -457,6 +462,7 @@ function drawHeatmapSection(
 
   for (let i = 0; i < colors.length; i += 1) {
     const legendX = legendStartX + 28 + i * (layout.cellSize + 3);
+
     svg = svg.rect({
       x: legendX,
       y: legendY,
@@ -606,6 +612,7 @@ export function renderUsageHeatmapsSvg({
 
   sections.forEach((section, index) => {
     const sectionY = outerPadding + index * (layout.height + sectionGap);
+
     svg = drawHeatmapSection(svg, {
       x: outerPadding,
       y: sectionY,

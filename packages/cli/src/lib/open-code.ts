@@ -102,6 +102,7 @@ export async function loadOpenCodeRows(
     addDailyTokenTotals(totals, date, tokenTotals, modelName);
 
     const existing = modelTotals.get(modelName);
+
     if (existing) {
       existing.input += tokenTotals.input;
       existing.output += tokenTotals.output;
@@ -114,6 +115,7 @@ export async function loadOpenCodeRows(
 
     if (date >= recentStart) {
       const recentExisting = recentModelTotals.get(modelName);
+
       if (recentExisting) {
         recentExisting.input += tokenTotals.input;
         recentExisting.output += tokenTotals.output;

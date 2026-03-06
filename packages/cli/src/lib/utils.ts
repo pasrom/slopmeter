@@ -24,10 +24,10 @@ export interface ModelTokenTotals {
   total: number;
 }
 
-type TokenTotals = {
+interface TokenTotals {
   tokens: DailyTokenTotals;
   models: Map<string, ModelTokenTotals>;
-};
+}
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -42,10 +42,12 @@ export function addDailyTokenTotals(
 
   if (!existing) {
     const models = new Map<string, ModelTokenTotals>();
+
     if (modelName) {
       models.set(modelName, { ...tokenTotals });
     }
     totals.set(key, { tokens: { ...tokenTotals }, models });
+
     return;
   }
 
@@ -57,6 +59,7 @@ export function addDailyTokenTotals(
 
   if (modelName) {
     const existingModel = existing.models.get(modelName);
+
     if (existingModel) {
       existingModel.input += tokenTotals.input;
       existingModel.output += tokenTotals.output;
@@ -100,6 +103,7 @@ export async function listFilesRecursive(rootDir: string, extension: string) {
     const currentDir = stack.pop()!;
 
     let entries;
+
     try {
       entries = await readdir(currentDir, {
         withFileTypes: true,
@@ -111,6 +115,7 @@ export async function listFilesRecursive(rootDir: string, extension: string) {
 
     for (const entry of entries) {
       const fullPath = join(currentDir, entry.name);
+
       if (entry.isDirectory()) {
         stack.push(fullPath);
         continue;
@@ -167,6 +172,7 @@ export function getTopModel(
 
 function startOfDay(date: Date) {
   const day = new Date(date);
+
   day.setHours(0, 0, 0, 0);
 
   return day;

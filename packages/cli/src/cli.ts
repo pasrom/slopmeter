@@ -14,14 +14,14 @@ import { formatLocalDate } from "./lib/utils";
 import { aggregateUsage, providerIds, providerStatusLabel } from "./providers";
 
 type OutputFormat = "png" | "svg" | "json";
-type CliArgValues = {
+interface CliArgValues {
   output?: string;
   format?: string;
   help: boolean;
   claude: boolean;
   codex: boolean;
   opencode: boolean;
-};
+}
 
 const PNG_BASE_WIDTH = 1000;
 const PNG_SCALE = 4;
@@ -94,6 +94,7 @@ async function writeOutputImage(
 ) {
   if (format === "svg") {
     writeFileSync(outputPath, svg, "utf8");
+
     return;
   }
 
@@ -145,6 +146,7 @@ async function main() {
 
   if (values.help) {
     printHelp();
+
     return;
   }
 
@@ -155,9 +157,11 @@ async function main() {
     }).start();
 
     const end = new Date();
+
     end.setHours(0, 0, 0, 0);
 
     const start = new Date(end);
+
     start.setFullYear(start.getFullYear() - 1);
 
     const format = inferFormat(values.format, values.output);
@@ -200,6 +204,7 @@ async function main() {
     const outputPath = resolve(
       values.output ?? `./heatmap-last-year.${format}`,
     );
+
     mkdirSync(dirname(outputPath), { recursive: true });
 
     if (format === "json") {

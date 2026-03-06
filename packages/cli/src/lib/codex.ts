@@ -104,6 +104,7 @@ function subtractCodexUsage(
 
 function asNonEmptyString(value?: string) {
   const trimmed = value?.trim();
+
   return trimmed === "" ? undefined : trimmed;
 }
 
@@ -237,6 +238,7 @@ export async function loadCodexRows(
 
       if (normalizedModelName) {
         const existing = modelTotals.get(normalizedModelName);
+
         if (existing) {
           existing.input += usage.input;
           existing.output += usage.output;
@@ -249,6 +251,7 @@ export async function loadCodexRows(
 
         if (date >= recentStart) {
           const recentExisting = recentModelTotals.get(normalizedModelName);
+
           if (recentExisting) {
             recentExisting.input += usage.input;
             recentExisting.output += usage.output;

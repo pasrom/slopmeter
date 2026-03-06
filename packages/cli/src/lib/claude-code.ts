@@ -65,6 +65,7 @@ function getClaudeProjectDirs() {
 
   for (const basePath of getClaudeConfigPaths()) {
     const projectsDir = join(basePath, CLAUDE_PROJECTS_DIR_NAME);
+
     if (existsSync(projectsDir) && !unique.has(projectsDir)) {
       unique.add(projectsDir);
       dirs.push(projectsDir);
@@ -144,6 +145,7 @@ function addModelTotals(
   tokens: DailyTokenTotals,
 ) {
   const existing = modelTotals.get(modelName);
+
   if (existing) {
     existing.input += tokens.input;
     existing.output += tokens.output;
@@ -173,6 +175,7 @@ export async function loadClaudeRows(
   for (const session of sessions) {
     for (const entry of session) {
       const uniqueHash = createUniqueHash(entry.messageId, entry.requestId);
+
       if (uniqueHash && processedHashes.has(uniqueHash)) {
         continue;
       }
@@ -182,11 +185,13 @@ export async function loadClaudeRows(
       }
 
       const timestamp = new Date(entry.timestamp);
+
       if (timestamp < startDate || timestamp > endDate) {
         continue;
       }
 
       const tokenTotals = createClaudeTokenTotals(entry.usage);
+
       if (tokenTotals.total <= 0) {
         continue;
       }
