@@ -7,6 +7,7 @@ import {
   providerStatusLabel,
   type ProviderId,
 } from "./lib/interfaces";
+import { loadOpenClawRows } from "./lib/openclaw";
 import { loadOpenCodeRows } from "./lib/open-code";
 import { hasUsage, mergeUsageSummaries } from "./lib/utils";
 
@@ -50,6 +51,7 @@ export async function aggregateUsage({
     codex: null,
     cursor: null,
     opencode: null,
+    openclaw: null,
   };
   const warnings: string[] = [];
 
@@ -61,7 +63,9 @@ export async function aggregateUsage({
           ? await loadCodexRows(start, end, warnings)
           : provider === "cursor"
             ? await loadCursorRows(start, end)
-          : await loadOpenCodeRows(start, end);
+            : provider === "openclaw"
+              ? await loadOpenClawRows(start, end)
+              : await loadOpenCodeRows(start, end);
 
     rowsByProvider[provider] = hasUsage(summary) ? summary : null;
   }

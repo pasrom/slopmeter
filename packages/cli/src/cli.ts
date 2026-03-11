@@ -32,6 +32,7 @@ interface CliArgValues {
   codex: boolean;
   cursor: boolean;
   opencode: boolean;
+  openclaw: boolean;
   merge?: string[];
 }
 
@@ -54,6 +55,7 @@ Options:
   --codex                     Render Codex graph
   --cursor                    Render Cursor graph
   --opencode                  Render Open Code graph
+  --openclaw                  Render OpenClaw graph
   --merge <files...>          Merge multiple JSON exports into one heatmap
   --dark                      Render with the dark theme
   -f, --format                Output format: png, svg, or json (default: png)
@@ -78,6 +80,7 @@ function validateArgs(values: unknown): asserts values is CliArgValues {
       codex: ow.boolean,
       cursor: ow.boolean,
       opencode: ow.boolean,
+      openclaw: ow.boolean,
       merge: ow.optional.array.ofType(ow.string.nonEmpty),
     }),
   );
@@ -221,7 +224,7 @@ function getOutputProviders(
 
   if (!merged) {
     throw new Error(
-      "No usage data found for Claude code, Codex, Cursor, or Open code.",
+      "No usage data found for Claude code, Codex, Cursor, Open code, or OpenClaw.",
     );
   }
 
@@ -256,7 +259,7 @@ function selectProvidersToRender(
 
   if (providersToRender.length === 0) {
     throw new Error(
-      "No usage data found for Claude code, Codex, Cursor, or Open code.",
+      "No usage data found for Claude code, Codex, Cursor, Open code, or OpenClaw.",
     );
   }
 
@@ -301,6 +304,7 @@ async function main() {
       codex: { type: "boolean", default: false },
       cursor: { type: "boolean", default: false },
       opencode: { type: "boolean", default: false },
+      openclaw: { type: "boolean", default: false },
       merge: { type: "string", multiple: true },
     },
     allowPositionals: false,
