@@ -1,5 +1,7 @@
+export type UsageProviderId = "claude" | "codex" | "opencode" | "all";
+
 export interface UsageSummary {
-  provider: "claude" | "codex" | "opencode";
+  provider: UsageProviderId;
   daily: DailyUsage[];
   insights?: Insights;
 }
@@ -48,7 +50,7 @@ export interface JsonExportPayload {
 }
 
 export interface JsonUsageSummary {
-  provider: "claude" | "codex" | "opencode";
+  provider: UsageProviderId;
   daily: JsonDailyUsage[];
   insights?: Insights;
 }

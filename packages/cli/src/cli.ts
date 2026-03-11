@@ -9,10 +9,16 @@ import type {
   JsonExportPayload,
   JsonUsageSummary,
   UsageSummary,
+  UsageProviderId,
 } from "./interfaces";
 import type { ProviderId } from "./providers";
 import { formatLocalDate } from "./lib/utils";
-import { aggregateUsage, providerIds, providerStatusLabel } from "./providers";
+import {
+  aggregateUsage,
+  mergeProviderUsage,
+  providerIds,
+  providerStatusLabel,
+} from "./providers";
 
 type OutputFormat = "png" | "svg" | "json";
 interface CliArgValues {
@@ -20,6 +26,7 @@ interface CliArgValues {
   format?: string;
   help: boolean;
   dark: boolean;
+  all: boolean;
   claude: boolean;
   codex: boolean;
   opencode: boolean;
@@ -35,9 +42,10 @@ const HELP_TEXT = `slopmeter
 Generate rolling 1-year usage heatmap image(s) (today is the latest day).
 
 Usage:
-  slopmeter [--claude] [--codex] [--opencode] [--dark] [--format png|svg|json] [--output ./heatmap-last-year.png]
+  slopmeter [--all] [--claude] [--codex] [--opencode] [--dark] [--format png|svg|json] [--output ./heatmap-last-year.png]
 
 Options:
+  --all                       Render one merged graph for all providers
   --claude                    Render Claude Code graph
   --codex                     Render Codex graph
   --opencode                  Render Open Code graph
@@ -59,6 +67,7 @@ function validateArgs(values: unknown): asserts values is CliArgValues {
       format: ow.optional.string.nonEmpty,
       help: ow.boolean,
       dark: ow.boolean,
+      all: ow.boolean,
       claude: ow.boolean,
       codex: ow.boolean,
       opencode: ow.boolean,
@@ -160,6 +169,26 @@ function getRequestedProviders(values: CliArgValues) {
   return providerIds.filter((id) => values[id]);
 }
 
+function getOutputProviders(
+  values: CliArgValues,
+  rowsByProvider: Record<ProviderId, UsageSummary | null>,
+  end: Date,
+) {
+  if (!values.all) {
+    return selectProvidersToRender(rowsByProvider, getRequestedProviders(values));
+  }
+
+  const merged = mergeProviderUsage(rowsByProvider, end);
+
+  if (!merged) {
+    throw new Error(
+      "No usage data found for Claude code, Codex, or Open code.",
+    );
+  }
+
+  return [merged];
+}
+
 function selectProvidersToRender(
   rowsByProvider: Record<ProviderId, UsageSummary | null>,
   requested: ProviderId[],
@@ -192,7 +221,7 @@ function printRunSummary(
   colorMode: ColorMode,
   startDate: Date,
   endDate: Date,
-  rendered: ProviderId[],
+  rendered: UsageProviderId[],
 ) {
   process.stdout.write(
     `${JSON.stringify(
@@ -219,6 +248,7 @@ async function main() {
       format: { type: "string", short: "f" },
       help: { type: "boolean", short: "h", default: false },
       dark: { type: "boolean", default: false },
+      all: { type: "boolean", default: false },
       claude: { type: "boolean", default: false },
       codex: { type: "boolean", default: false },
       opencode: { type: "boolean", default: false },
@@ -245,7 +275,7 @@ async function main() {
     const { start, end } = getDateWindow();
     const colorMode: ColorMode = values.dark ? "dark" : "light";
     const format = inferFormat(values.format, values.output);
-    const requestedProviders = getRequestedProviders(values);
+    const requestedProviders = values.all ? providerIds : getRequestedProviders(values);
     const inspectedProviders =
       requestedProviders.length > 0 ? requestedProviders : providerIds;
     const { rowsByProvider, warnings } = await aggregateUsage({
@@ -262,9 +292,10 @@ async function main() {
 
     printProviderAvailability(rowsByProvider, inspectedProviders);
 
-    const exportProviders = selectProvidersToRender(
+    const exportProviders = getOutputProviders(
+      values,
       rowsByProvider,
-      requestedProviders,
+      end,
     );
 
     const outputPath = resolve(
@@ -298,6 +329,7 @@ async function main() {
           daily,
           insights,
           title: heatmapThemes[provider].title,
+          titleCaption: heatmapThemes[provider].titleCaption,
           colors: heatmapThemes[provider].colors,
         })),
       });

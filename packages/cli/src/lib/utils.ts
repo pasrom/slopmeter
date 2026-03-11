@@ -787,3 +787,66 @@ export function hasUsage(summary: UsageSummary) {
     (row) => row.total > 0 || (row.displayValue ?? 0) > 0,
   );
 }
+
+export function mergeUsageSummaries(
+  provider: UsageSummary["provider"],
+  summaries: UsageSummary[],
+  end: Date,
+): UsageSummary {
+  const totals: DailyTotalsByDate = new Map();
+  const modelTotals = new Map<string, ModelTokenTotals>();
+  const recentModelTotals = new Map<string, ModelTokenTotals>();
+  const displayValuesByDate = new Map<string, number>();
+  const recentStart = getRecentWindowStart(end, 30);
+
+  for (const summary of summaries) {
+    for (const row of summary.daily) {
+      addDailyTokenTotals(totals, row.date, {
+        input: row.input,
+        output: row.output,
+        cache: { input: row.cache.input, output: row.cache.output },
+        total: row.total,
+      });
+
+      const dateKey = formatLocalDate(row.date);
+      const displayValue = row.displayValue ?? row.total;
+
+      if (displayValue > 0) {
+        displayValuesByDate.set(
+          dateKey,
+          (displayValuesByDate.get(dateKey) ?? 0) + displayValue,
+        );
+      }
+
+      const totalsForDate = totals.get(dateKey);
+
+      if (totalsForDate) {
+        for (const breakdown of row.breakdown) {
+          addModelTokenTotals(
+            totalsForDate.models,
+            breakdown.name,
+            breakdown.tokens,
+          );
+          addModelTokenTotals(modelTotals, breakdown.name, breakdown.tokens);
+
+          if (row.date >= recentStart) {
+            addModelTokenTotals(
+              recentModelTotals,
+              breakdown.name,
+              breakdown.tokens,
+            );
+          }
+        }
+      }
+    }
+  }
+
+  return createUsageSummary(
+    provider,
+    totals,
+    modelTotals,
+    recentModelTotals,
+    end,
+    displayValuesByDate,
+  );
+}

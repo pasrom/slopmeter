@@ -3,8 +3,11 @@ import type { DailyUsage, Insights, ModelUsage } from "./interfaces";
 import type { ProviderId } from "./lib/interfaces";
 import { formatLocalDate } from "./lib/utils";
 
+type HeatmapThemeId = ProviderId | "all";
+
 interface HeatmapTheme {
   title: string;
+  titleCaption?: string;
   colors: {
     light: string[];
     dark: string[];
@@ -43,6 +46,7 @@ interface DrawHeatmapSectionOptions {
   daily: DailyUsage[];
   insights?: Insights;
   title: string;
+  titleCaption?: string;
   colors: HeatmapTheme["colors"];
   colorMode: ColorMode;
   palette: SurfacePalette;
@@ -52,6 +56,7 @@ interface RenderUsageHeatmapsSvgSection {
   daily: DailyUsage[];
   insights?: Insights;
   title: string;
+  titleCaption?: string;
   colors: HeatmapTheme["colors"];
 }
 
@@ -73,7 +78,7 @@ interface SurfacePalette {
   muted: string;
 }
 
-export const heatmapThemes: Record<ProviderId, HeatmapTheme> = {
+export const heatmapThemes: Record<HeatmapThemeId, HeatmapTheme> = {
   claude: {
     title: "Claude Code",
     colors: {
@@ -131,6 +136,26 @@ export const heatmapThemes: Record<ProviderId, HeatmapTheme> = {
       ],
     },
   },
+  all: {
+    title: "Codex / Claude Code / Open Code",
+    titleCaption: "Total usage from",
+    colors: {
+      light: [
+        "#f0fdf4", // green-50
+        "#bbf7d0", // green-200
+        "#4ade80", // green-400
+        "#16a34a", // green-600
+        "#14532d", // green-900
+      ],
+      dark: [
+        "#052e16", // green-950
+        "#15803d", // green-700
+        "#16a34a", // green-600
+        "#4ade80", // green-400
+        "#bbf7d0", // green-200
+      ],
+    },
+  },
 };
 
 const daysOfWeekMonday = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -141,6 +166,7 @@ const providerTitleFontSize = 20;
 const metricCaptionFontSize = 9;
 const metricValueFontSize = 14;
 const captionValueGap = 4;
+const heatmapGamma = 0.7;
 
 const surfacePalettes: Record<ColorMode, SurfacePalette> = {
   light: {
@@ -153,6 +179,11 @@ const surfacePalettes: Record<ColorMode, SurfacePalette> = {
     text: "#fafafa",
     muted: "#a3a3a3",
   },
+};
+
+const emptyCellFill: Record<ColorMode, string> = {
+  light: "#f5f5f5", // neutral-100
+  dark: "#262626", // neutral-800
 };
 
 function formatTokenTotal(value: number) {
@@ -250,7 +281,7 @@ function defaultColourMap(value: number, max: number, colorCount: number) {
     return 0;
   }
 
-  const scaled = Math.log1p(value) / Math.log1p(max);
+  const scaled = Math.pow(value / max, heatmapGamma);
   const index = Math.ceil(scaled * (colorCount - 1));
 
   return Math.min(Math.max(index, 0), colorCount - 1);
@@ -333,12 +364,14 @@ function drawHeatmapSection(
     daily,
     insights,
     title,
+    titleCaption,
     colors,
     colorMode,
     palette,
   }: DrawHeatmapSectionOptions,
 ) {
   const colorsForMode = colors[colorMode];
+  const legendColors = [emptyCellFill[colorMode], ...colorsForMode.slice(1)];
   const valueByDate = new Map<string, number>();
   const rightEdge = x + layout.width - 8;
   const leftColumnX = x + 8;
@@ -377,18 +410,46 @@ function drawHeatmapSection(
   const longestStreak = insights?.streaks.longest ?? 0;
   const currentStreak = insights?.streaks.current ?? 0;
 
-  svg = svg.text(
-    {
-      x: leftColumnX,
-      y: y + layout.titleY,
-      fill: palette.text,
-      "font-size": providerTitleFontSize,
-      "font-weight": 600,
-      "dominant-baseline": "hanging",
-      "font-family": fontFamily,
-    },
-    title,
-  );
+  if (titleCaption) {
+    svg = svg.text(
+      {
+        x: leftColumnX,
+        y: y + layout.headerCaptionY,
+        fill: palette.muted,
+        "font-size": metricCaptionFontSize,
+        "font-weight": 600,
+        "dominant-baseline": "hanging",
+        "font-family": fontFamily,
+      },
+      caption(titleCaption),
+    );
+
+    svg = svg.text(
+      {
+        x: leftColumnX,
+        y: y + layout.headerValueY,
+        fill: palette.text,
+        "font-size": metricValueFontSize,
+        "font-weight": 600,
+        "dominant-baseline": "hanging",
+        "font-family": fontFamily,
+      },
+      title,
+    );
+  } else {
+    svg = svg.text(
+      {
+        x: leftColumnX,
+        y: y + layout.titleY,
+        fill: palette.text,
+        "font-size": providerTitleFontSize,
+        "font-weight": 600,
+        "dominant-baseline": "hanging",
+        "font-family": fontFamily,
+      },
+      title,
+    );
+  }
 
   svg = svg.text(
     {
@@ -531,7 +592,7 @@ function drawHeatmapSection(
         maxValue,
         colorsForMode.length,
       );
-      const fill = colorsForMode[colorIndex];
+      const fill = value <= 0 ? emptyCellFill[colorMode] : colorsForMode[colorIndex];
       const dayX =
         x + layout.leftLabelWidth + weekIndex * (layout.cellSize + layout.gap);
       const dayY =
@@ -592,7 +653,7 @@ function drawHeatmapSection(
     caption("Less"),
   );
 
-  for (let i = 0; i < colorsForMode.length; i += 1) {
+  for (let i = 0; i < legendColors.length; i += 1) {
     const legendX = legendStartX + 28 + i * (layout.cellSize + 3);
 
     svg = svg.rect({
@@ -602,13 +663,13 @@ function drawHeatmapSection(
       height: layout.cellSize,
       rx: 3,
       ry: 3,
-      fill: colorsForMode[i],
+      fill: legendColors[i],
     });
   }
 
   svg = svg.text(
     {
-      x: legendStartX + 28 + colorsForMode.length * (layout.cellSize + 3) + 6,
+      x: legendStartX + 28 + legendColors.length * (layout.cellSize + 3) + 6,
       y: legendY + 10,
       fill: palette.muted,
       "font-size": 10,
@@ -789,6 +850,7 @@ export function renderUsageHeatmapsSvg({
       daily: section.daily,
       insights: section.insights,
       title: section.title,
+      titleCaption: section.titleCaption,
       colors: section.colors,
       colorMode,
       palette,

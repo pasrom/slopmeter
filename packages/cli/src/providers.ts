@@ -7,7 +7,7 @@ import {
   type ProviderId,
 } from "./lib/interfaces";
 import { loadOpenCodeRows } from "./lib/open-code";
-import { hasUsage } from "./lib/utils";
+import { hasUsage, mergeUsageSummaries } from "./lib/utils";
 
 export { providerIds, providerStatusLabel, type ProviderId };
 
@@ -20,6 +20,21 @@ interface AggregateUsageOptions {
 export interface AggregateUsageResult {
   rowsByProvider: Record<ProviderId, UsageSummary | null>;
   warnings: string[];
+}
+
+export function mergeProviderUsage(
+  rowsByProvider: Record<ProviderId, UsageSummary | null>,
+  end: Date,
+): UsageSummary | null {
+  const summaries = providerIds
+    .map((provider) => rowsByProvider[provider])
+    .filter((summary): summary is UsageSummary => summary !== null);
+
+  if (summaries.length === 0) {
+    return null;
+  }
+
+  return mergeUsageSummaries("all", summaries, end);
 }
 
 export async function aggregateUsage({

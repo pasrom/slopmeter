@@ -1,6 +1,4 @@
-import type { UsageSummary } from "../interfaces";
-
-export type ProviderId = UsageSummary["provider"];
+export type ProviderId = "claude" | "codex" | "opencode";
 
 export const providerIds: ProviderId[] = ["claude", "codex", "opencode"];
 

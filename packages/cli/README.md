@@ -24,7 +24,7 @@ slopmeter
 ## Usage
 
 ```bash
-slopmeter [--claude] [--codex] [--opencode] [--dark] [--format png|svg|json] [--output ./heatmap-last-year.png]
+slopmeter [--all] [--claude] [--codex] [--opencode] [--dark] [--format png|svg|json] [--output ./heatmap-last-year.png]
 ```
 
 By default, the CLI:
@@ -38,6 +38,7 @@ By default, the CLI:
 - `--claude`: include only Claude Code data
 - `--codex`: include only Codex data
 - `--opencode`: include only Open Code data
+- `--all`: merge all providers into one combined graph
 - `--dark`: render the image with the dark theme
 - `-f, --format <png|svg|json>`: choose the output format
 - `-o, --output <path>`: write output to a custom path
@@ -69,6 +70,12 @@ Render only Codex usage:
 npx slopmeter --codex
 ```
 
+Render one merged graph across all providers:
+
+```bash
+npx slopmeter --all
+```
+
 When provider flags are present, `slopmeter` only loads those providers and only prints availability for those providers.
 
 Render a dark-theme SVG:
@@ -97,6 +104,7 @@ When Claude Code falls back to `history.jsonl`, those days are rendered as activ
 ## Exit behavior
 
 - If no provider flags are passed, `slopmeter` renders every provider with available data.
+- If `--all` is passed, `slopmeter` loads all providers and renders one combined graph with merged totals, streaks, and model rankings.
 - If provider flags are passed and a requested provider has no data, the command exits with an error.
 - If no provider has data, the command exits with an error.
 

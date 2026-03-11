@@ -52,6 +52,9 @@ slopmeter -f svg
 slopmeter --dark
 slopmeter --dark --format svg
 
+# Merge all providers into one graph
+slopmeter --all
+
 # Provider filters (optional)
 slopmeter --claude
 slopmeter --codex
@@ -93,6 +96,7 @@ Model names are normalized to remove a trailing date suffix like `-20251101`.
 ## Provider/data behavior
 
 - If no provider flags are passed, the CLI renders all providers with available data.
+- If `--all` is passed, the CLI renders one merged graph across all providers with consolidated totals, streaks, and model rankings.
 - If provider flags are passed, `slopmeter` only loads those providers and only prints availability for those providers.
 - If no provider flags are passed, the CLI loads all providers and prints availability for all providers.
 - If explicit provider flags are passed and any requested provider has no data, the command exits with an error.
