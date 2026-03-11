@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import type { UsageSummary } from "../interfaces";
@@ -71,21 +71,51 @@ interface ClaudeHistoryEntry {
   timestamp?: number | string;
 }
 
-function getClaudeConfigPaths() {
-  const envPaths = (process.env[CLAUDE_CONFIG_DIR_ENV] ?? "").trim();
+function discoverClaudeWorkDirs() {
+  const home = homedir();
 
-  if (envPaths !== "") {
-    return envPaths
-      .split(",")
-      .map((path) => path.trim())
-      .filter((path) => path !== "")
-      .map((path) => resolve(path));
+  try {
+    return readdirSync(home, { withFileTypes: true })
+      .filter(
+        (entry) =>
+          entry.isDirectory() &&
+          entry.name.startsWith(".claude") &&
+          entry.name !== ".claude",
+      )
+      .map((entry) => join(home, entry.name));
+  } catch {
+    return [];
   }
+}
 
+function getClaudeConfigPaths() {
   const xdgConfigHome =
     process.env.XDG_CONFIG_HOME?.trim() || join(homedir(), ".config");
 
-  return [join(xdgConfigHome, "claude"), join(homedir(), ".claude")];
+  const defaults = [join(xdgConfigHome, "claude"), join(homedir(), ".claude")];
+
+  const envPaths = (process.env[CLAUDE_CONFIG_DIR_ENV] ?? "").trim();
+
+  const envResolved =
+    envPaths === ""
+      ? []
+      : envPaths
+          .split(",")
+          .map((path) => path.trim())
+          .filter((path) => path !== "")
+          .map((path) => resolve(path));
+
+  const seen = new Set(envResolved);
+  const paths = [...envResolved];
+
+  for (const path of [...defaults, ...discoverClaudeWorkDirs()]) {
+    if (!seen.has(path)) {
+      seen.add(path);
+      paths.push(path);
+    }
+  }
+
+  return paths;
 }
 
 function getClaudeProjectDirs() {
