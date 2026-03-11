@@ -189,27 +189,49 @@ export function mergeModelTotals(
   }
 }
 
-export function totalsToRows(totals: DailyTotalsByDate): DailyUsage[] {
-  return [...totals.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, { tokens, models }]) => ({
-      date: new Date(`${date}T00:00:00`),
-      input: tokens.input,
-      output: tokens.output,
-      cache: { input: tokens.cache.input, output: tokens.cache.output },
-      total: tokens.total,
-      breakdown: [...models.entries()]
-        .sort(([, a], [, b]) => b.total - a.total)
-        .map(([name, t]) => ({
-          name,
-          tokens: {
-            input: t.input,
-            output: t.output,
-            cache: { input: t.cache.input, output: t.cache.output },
-            total: t.total,
-          },
-        })),
-    }));
+export function totalsToRows(
+  totals: DailyTotalsByDate,
+  displayValuesByDate = new Map<string, number>(),
+): DailyUsage[] {
+  const allDates = new Set<string>([
+    ...totals.keys(),
+    ...displayValuesByDate.keys(),
+  ]);
+
+  return [...allDates]
+    .sort((a, b) => a.localeCompare(b))
+    .map((date) => {
+      const entry = totals.get(date);
+      const tokens = entry?.tokens ?? {
+        input: 0,
+        output: 0,
+        cache: { input: 0, output: 0 },
+        total: 0,
+      };
+      const models = entry?.models ?? new Map<string, ModelTokenTotals>();
+      const displayValue =
+        tokens.total > 0 ? tokens.total : (displayValuesByDate.get(date) ?? 0);
+
+      return {
+        date: new Date(`${date}T00:00:00`),
+        input: tokens.input,
+        output: tokens.output,
+        cache: { input: tokens.cache.input, output: tokens.cache.output },
+        total: tokens.total,
+        displayValue: displayValue > 0 ? displayValue : undefined,
+        breakdown: [...models.entries()]
+          .sort(([, a], [, b]) => b.total - a.total)
+          .map(([name, t]) => ({
+            name,
+            tokens: {
+              input: t.input,
+              output: t.output,
+              cache: { input: t.cache.input, output: t.cache.output },
+              total: t.total,
+            },
+          })),
+      };
+    });
 }
 
 export async function listFilesRecursive(rootDir: string, extension: string) {
@@ -731,13 +753,14 @@ export function getProviderInsights(
 ): Insights {
   const mostUsedModel = getTopModel(modelTotals);
   const recentMostUsedModel = getTopModel(recentModelTotals);
+  const measuredDaily = daily.filter((row) => row.total > 0);
 
   return {
     mostUsedModel,
     recentMostUsedModel,
     streaks: {
-      longest: computeLongestStreak(daily),
-      current: computeCurrentStreak(daily, end),
+      longest: computeLongestStreak(measuredDaily),
+      current: computeCurrentStreak(measuredDaily, end),
     },
   };
 }
@@ -748,8 +771,9 @@ export function createUsageSummary(
   modelTotals: Map<string, ModelTokenTotals>,
   recentModelTotals: Map<string, ModelTokenTotals>,
   end: Date,
+  displayValuesByDate?: Map<string, number>,
 ): UsageSummary {
-  const daily = totalsToRows(totals);
+  const daily = totalsToRows(totals, displayValuesByDate);
 
   return {
     provider,
@@ -759,5 +783,7 @@ export function createUsageSummary(
 }
 
 export function hasUsage(summary: UsageSummary) {
-  return summary.daily.some((row) => row.total > 0);
+  return summary.daily.some(
+    (row) => row.total > 0 || (row.displayValue ?? 0) > 0,
+  );
 }

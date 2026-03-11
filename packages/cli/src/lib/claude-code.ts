@@ -11,16 +11,19 @@ import {
   addDailyTokenTotals,
   addModelTokenTotals,
   createUsageSummary,
+  formatLocalDate,
   getPositiveIntegerEnv,
   getRecentWindowStart,
   listFilesRecursive,
   normalizeModelName,
+  readJsonDocument,
   readJsonLines,
   runWithConcurrency,
 } from "./utils";
 
 const CLAUDE_CONFIG_DIR_ENV = "CLAUDE_CONFIG_DIR";
 const CLAUDE_PROJECTS_DIR_NAME = "projects";
+const CLAUDE_STATS_CACHE_FILE_NAME = "stats-cache.json";
 
 interface ClaudeUsagePayload {
   input_tokens?: number;
@@ -45,6 +48,27 @@ interface ClaudeLogEntry {
   model?: string;
   messageId?: string;
   requestId?: string;
+}
+
+interface ClaudeStatsCacheModelUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadInputTokens?: number;
+  cacheCreationInputTokens?: number;
+}
+
+interface ClaudeStatsCacheEntry {
+  date?: string;
+  tokensByModel?: Record<string, number>;
+}
+
+interface ClaudeStatsCache {
+  dailyModelTokens?: ClaudeStatsCacheEntry[];
+  modelUsage?: Record<string, ClaudeStatsCacheModelUsage>;
+}
+
+interface ClaudeHistoryEntry {
+  timestamp?: number | string;
 }
 
 function getClaudeConfigPaths() {
@@ -80,6 +104,22 @@ function getClaudeProjectDirs() {
   return dirs;
 }
 
+function getClaudeStatsCacheFiles() {
+  const unique = new Set<string>();
+  const files: string[] = [];
+
+  for (const basePath of getClaudeConfigPaths()) {
+    const statsCacheFile = join(basePath, CLAUDE_STATS_CACHE_FILE_NAME);
+
+    if (existsSync(statsCacheFile) && !unique.has(statsCacheFile)) {
+      unique.add(statsCacheFile);
+      files.push(statsCacheFile);
+    }
+  }
+
+  return files;
+}
+
 function parseClaudeLogEntry(entry: ClaudeRawLogEntry): ClaudeLogEntry | null {
   if (!entry.timestamp || !entry.message?.usage) {
     return null;
@@ -108,6 +148,91 @@ function createClaudeTokenTotals(usage: ClaudeUsagePayload): DailyTokenTotals {
   };
 }
 
+function distributeTokenComponents(total: number, weights: number[]) {
+  const weightSum = weights.reduce((sum, value) => sum + value, 0);
+
+  if (total <= 0 || weightSum <= 0) {
+    return weights.map(() => 0);
+  }
+
+  const exact = weights.map((weight) => (weight / weightSum) * total);
+  const allocated = exact.map((value) => Math.floor(value));
+  let remainder = total - allocated.reduce((sum, value) => sum + value, 0);
+  const order = exact
+    .map((value, index) => ({
+      index,
+      fraction: value - allocated[index],
+      weight: weights[index],
+    }))
+    .sort((left, right) => {
+      if (right.fraction !== left.fraction) {
+        return right.fraction - left.fraction;
+      }
+
+      return right.weight - left.weight;
+    });
+
+  for (const { index } of order) {
+    if (remainder <= 0) {
+      break;
+    }
+
+    allocated[index] += 1;
+    remainder -= 1;
+  }
+
+  return allocated;
+}
+
+function createStatsCacheTokenTotals(
+  totalTokens: number,
+  usage?: ClaudeStatsCacheModelUsage,
+): DailyTokenTotals {
+  if (totalTokens <= 0) {
+    return {
+      input: 0,
+      output: 0,
+      cache: { input: 0, output: 0 },
+      total: 0,
+    };
+  }
+
+  const inputTokens = usage?.inputTokens ?? 0;
+  const outputTokens = usage?.outputTokens ?? 0;
+  const cacheReadInputTokens = usage?.cacheReadInputTokens ?? 0;
+  const cacheCreationInputTokens = usage?.cacheCreationInputTokens ?? 0;
+  const [scaledInput, scaledOutput, scaledCacheRead, scaledCacheCreation] =
+    distributeTokenComponents(totalTokens, [
+      inputTokens,
+      outputTokens,
+      cacheReadInputTokens,
+      cacheCreationInputTokens,
+    ]);
+
+  // Older Claude installs only keep daily totals in stats-cache.json, so
+  // reconstruct the input/output/cache split from the cached model totals.
+  if (
+    scaledInput === 0 &&
+    scaledOutput === 0 &&
+    scaledCacheRead === 0 &&
+    scaledCacheCreation === 0
+  ) {
+    return {
+      input: totalTokens,
+      output: 0,
+      cache: { input: 0, output: 0 },
+      total: totalTokens,
+    };
+  }
+
+  return {
+    input: scaledInput + scaledCacheRead,
+    output: scaledOutput + scaledCacheCreation,
+    cache: { input: scaledCacheRead, output: scaledCacheCreation },
+    total: totalTokens,
+  };
+}
+
 async function getClaudeFiles() {
   const projectDirs = getClaudeProjectDirs();
   const files = (
@@ -117,6 +242,118 @@ async function getClaudeFiles() {
   ).flat();
 
   return files;
+}
+
+function getClaudeHistoryFiles() {
+  const unique = new Set<string>();
+  const files: string[] = [];
+
+  for (const basePath of getClaudeConfigPaths()) {
+    const historyFile = join(basePath, "history.jsonl");
+
+    if (existsSync(historyFile) && !unique.has(historyFile)) {
+      unique.add(historyFile);
+      files.push(historyFile);
+    }
+  }
+
+  return files;
+}
+
+async function loadClaudeStatsCacheRows(
+  startDate: Date,
+  endDate: Date,
+  coveredDates: Set<string>,
+  totals: DailyTotalsByDate,
+  modelTotals: Map<string, ModelTokenTotals>,
+  recentModelTotals: Map<string, ModelTokenTotals>,
+  recentStart: Date,
+) {
+  const statsCacheFiles = getClaudeStatsCacheFiles();
+
+  for (const file of statsCacheFiles) {
+    let statsCache: ClaudeStatsCache;
+
+    try {
+      statsCache = await readJsonDocument<ClaudeStatsCache>(file);
+    } catch {
+      continue;
+    }
+
+    for (const row of statsCache.dailyModelTokens ?? []) {
+      if (!row.date || coveredDates.has(row.date)) {
+        continue;
+      }
+
+      const timestamp = new Date(`${row.date}T00:00:00`);
+
+      if (
+        Number.isNaN(timestamp.getTime()) ||
+        timestamp < startDate ||
+        timestamp > endDate
+      ) {
+        continue;
+      }
+
+      for (const [rawModelName, totalTokens] of Object.entries(
+        row.tokensByModel ?? {},
+      )) {
+        if (!Number.isFinite(totalTokens) || totalTokens <= 0) {
+          continue;
+        }
+
+        const modelName = normalizeModelName(rawModelName);
+        const tokenTotals = createStatsCacheTokenTotals(
+          totalTokens,
+          statsCache.modelUsage?.[rawModelName],
+        );
+
+        addDailyTokenTotals(totals, timestamp, tokenTotals, modelName);
+        addModelTokenTotals(modelTotals, modelName, tokenTotals);
+
+        if (timestamp >= recentStart) {
+          addModelTokenTotals(recentModelTotals, modelName, tokenTotals);
+        }
+      }
+    }
+  }
+}
+
+async function loadClaudeHistoryDisplayValues(
+  startDate: Date,
+  endDate: Date,
+  coveredDates: Set<string>,
+  displayValuesByDate: Map<string, number>,
+) {
+  const historyFiles = getClaudeHistoryFiles();
+
+  for (const file of historyFiles) {
+    for await (const line of readJsonLines<ClaudeHistoryEntry>(file)) {
+      const rawTimestamp = line.timestamp;
+      const timestamp =
+        typeof rawTimestamp === "number"
+          ? new Date(rawTimestamp)
+          : typeof rawTimestamp === "string"
+            ? new Date(rawTimestamp)
+            : null;
+
+      if (!timestamp || Number.isNaN(timestamp.getTime())) {
+        continue;
+      }
+
+      if (timestamp < startDate || timestamp > endDate) {
+        continue;
+      }
+
+      const dateKey = formatLocalDate(timestamp);
+
+      if (coveredDates.has(dateKey)) {
+        continue;
+      }
+
+      displayValuesByDate.set(dateKey, (displayValuesByDate.get(dateKey) ?? 0) + 1);
+    }
+  }
 }
 
 function createUniqueHash(messageId?: string, requestId?: string) {
@@ -135,6 +372,7 @@ export async function loadClaudeRows(
   const totals: DailyTotalsByDate = new Map();
   const modelTotals = new Map<string, ModelTokenTotals>();
   const recentModelTotals = new Map<string, ModelTokenTotals>();
+  const displayValuesByDate = new Map<string, number>();
   const recentStart = getRecentWindowStart(endDate, 30);
   const processedHashes = new Set<string>();
   const fileConcurrency = getPositiveIntegerEnv(
@@ -191,11 +429,29 @@ export async function loadClaudeRows(
     }
   });
 
+  await loadClaudeStatsCacheRows(
+    startDate,
+    endDate,
+    new Set(totals.keys()),
+    totals,
+    modelTotals,
+    recentModelTotals,
+    recentStart,
+  );
+
+  await loadClaudeHistoryDisplayValues(
+    startDate,
+    endDate,
+    new Set(totals.keys()),
+    displayValuesByDate,
+  );
+
   return createUsageSummary(
     "claude",
     totals,
     modelTotals,
     recentModelTotals,
     endDate,
+    displayValuesByDate,
   );
 }

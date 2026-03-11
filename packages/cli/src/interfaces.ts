@@ -13,6 +13,7 @@ export interface DailyUsage {
     output: number;
   };
   total: number;
+  displayValue?: number;
   // usage by model, sorted by total tokens
   breakdown: ModelUsage[];
 }
@@ -61,5 +62,6 @@ export interface JsonDailyUsage {
     output: number;
   };
   total: number;
+  displayValue?: number;
   breakdown: ModelUsage[];
 }

@@ -126,6 +126,7 @@ function toJsonUsageSummary(summary: UsageSummary): JsonUsageSummary {
       output: row.output,
       cache: row.cache,
       total: row.total,
+      displayValue: row.displayValue,
       breakdown: row.breakdown,
     })),
   };

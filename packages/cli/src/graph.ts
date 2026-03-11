@@ -30,6 +30,7 @@ interface SectionLayout {
   titleY: number;
   monthLabelY: number;
   legendY: number;
+  noteY: number;
   footerCaptionY: number;
   footerValueY: number;
 }
@@ -249,9 +250,17 @@ function defaultColourMap(value: number, max: number, colorCount: number) {
     return 0;
   }
 
-  const index = Math.ceil((value / max) * (colorCount - 1));
+  const scaled = Math.log1p(value) / Math.log1p(max);
+  const index = Math.ceil(scaled * (colorCount - 1));
 
   return Math.min(Math.max(index, 0), colorCount - 1);
+}
+
+function formatShortDate(dateIso: string) {
+  return new Date(`${dateIso}T00:00:00`).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
 }
 
 function getCalendarGrid(startDate: Date, endDate: Date) {
@@ -287,7 +296,8 @@ function getSectionLayout(weekCount: number) {
   const gridWidth = weekCount * cellSize + Math.max(weekCount - 1, 0) * gap;
   const legendY = gridTop + gridHeight + 28;
   const legendBottomY = legendY + cellSize;
-  const footerTopPadding = 32;
+  const noteY = legendBottomY + 14;
+  const footerTopPadding = 48;
   const footerCaptionY = legendBottomY + footerTopPadding;
   const footerValueY =
     footerCaptionY + metricCaptionFontSize + captionValueGap;
@@ -307,6 +317,7 @@ function getSectionLayout(weekCount: number) {
     titleY,
     monthLabelY,
     legendY,
+    noteY,
     footerCaptionY,
     footerValueY,
   };
@@ -335,10 +346,22 @@ function drawHeatmapSection(
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
   let totalTokens = 0;
+  let firstActivityOnlyDate: string | null = null;
+  let firstMeasuredDate: string | null = null;
 
   for (const row of daily) {
-    valueByDate.set(formatLocalDate(row.date), row.total);
-    maxValue = Math.max(maxValue, row.total);
+    const dateKey = formatLocalDate(row.date);
+    const displayValue = row.displayValue ?? row.total;
+
+    valueByDate.set(dateKey, displayValue);
+    maxValue = Math.max(maxValue, displayValue);
+    if (row.total <= 0 && displayValue > 0) {
+      if (!firstActivityOnlyDate || dateKey < firstActivityOnlyDate) {
+        firstActivityOnlyDate = dateKey;
+      }
+    } else if (row.total > 0 && (!firstMeasuredDate || dateKey < firstMeasuredDate)) {
+      firstMeasuredDate = dateKey;
+    }
     totalInputTokens += row.input;
     totalOutputTokens += row.output;
     totalTokens += row.total;
@@ -509,13 +532,11 @@ function drawHeatmapSection(
         colorsForMode.length,
       );
       const fill = colorsForMode[colorIndex];
-
       const dayX =
         x + layout.leftLabelWidth + weekIndex * (layout.cellSize + layout.gap);
       const dayY =
         y + layout.gridTop + dayIndex * (layout.cellSize + layout.gap);
-
-      svg = svg.rect({
+      const rectAttributes: Record<string, string | number> = {
         x: dayX,
         y: dayY,
         width: layout.cellSize,
@@ -523,8 +544,37 @@ function drawHeatmapSection(
         rx: 3,
         ry: 3,
         fill,
-      });
+      };
+
+      svg = svg.rect(rectAttributes);
     }
+  }
+
+  const transitionWeekIndex =
+    firstActivityOnlyDate && firstMeasuredDate
+      ? grid.weeks.findIndex((week) => week.includes(firstMeasuredDate))
+      : -1;
+
+  if (transitionWeekIndex > 0) {
+    const lineX =
+      x +
+      layout.leftLabelWidth +
+      transitionWeekIndex * (layout.cellSize + layout.gap) -
+      Math.max(layout.gap, 2);
+    const lineTop = y + layout.monthLabelY - 2;
+    const lineBottom =
+      y + layout.gridTop + 7 * layout.cellSize + 6 * layout.gap + 2;
+
+    svg = svg.line({
+      x1: lineX,
+      y1: lineTop,
+      x2: lineX,
+      y2: lineBottom,
+      stroke: palette.muted,
+      "stroke-width": 1,
+      "stroke-dasharray": "4 4",
+      "stroke-opacity": 0.65,
+    });
   }
 
   const legendStartX = x + layout.leftLabelWidth;
@@ -567,6 +617,25 @@ function drawHeatmapSection(
     },
     caption("More"),
   );
+
+  if (firstActivityOnlyDate && firstMeasuredDate) {
+    const noteX = x + layout.width / 2;
+    const noteY =
+      y + layout.gridTop + 7 * layout.cellSize + 6 * layout.gap + 8;
+
+    svg = svg.text(
+      {
+        x: noteX,
+        y: noteY,
+        fill: palette.muted,
+        "font-size": 10,
+        "text-anchor": "middle",
+        "dominant-baseline": "hanging",
+        "font-family": fontFamily,
+      },
+      `Claude started logging full token telemetry on ${formatShortDate(firstMeasuredDate)}; earlier activity may be undercounted.`,
+    );
+  }
 
   const rightColumnX = rightEdge;
   const leftSecondaryX = leftColumnX + 250;

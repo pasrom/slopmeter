@@ -22,6 +22,15 @@ function recentIso(daysAgo = 0) {
   return date.toISOString();
 }
 
+function recentDate(daysAgo = 0) {
+  const date = new Date();
+
+  date.setHours(12, 0, 0, 0);
+  date.setDate(date.getDate() - daysAgo);
+
+  return date.toISOString().slice(0, 10);
+}
+
 function ensureParent(path: string) {
   mkdirSync(dirname(path), { recursive: true });
 }
@@ -395,6 +404,210 @@ test("Claude JSONL streaming preserves usage results across multiple files", asy
     ["claude"],
   );
   assert.equal(payload.providers[0]?.daily[0]?.total, 25);
+});
+
+test("Claude falls back to stats-cache.json for older layouts without double counting project logs", async (t) => {
+  const workspace = createTempWorkspace("claude-stats-cache");
+
+  t.after(() => {
+    rmSync(workspace, { recursive: true, force: true });
+  });
+
+  const claudeConfig = join(workspace, "claude");
+  const outputPath = join(workspace, "out.json");
+
+  writeJsonlFile(join(claudeConfig, "projects", "current.jsonl"), [
+    claudeEntry({
+      timestamp: `${recentDate(2)}T10:00:00.000Z`,
+      messageId: "m-1",
+      requestId: "r-1",
+      model: "claude-opus-4-5-20251101",
+      input: 6,
+      output: 4,
+    }),
+  ]);
+  writeJsonFile(
+    join(claudeConfig, "stats-cache.json"),
+    JSON.stringify({
+      version: 2,
+      lastComputedDate: recentDate(1),
+      firstSessionDate: `${recentDate(4)}T08:00:00.000Z`,
+      dailyActivity: [],
+      dailyModelTokens: [
+        {
+          date: recentDate(4),
+          tokensByModel: {
+            "claude-opus-4-5-20251101": 100,
+          },
+        },
+        {
+          date: recentDate(2),
+          tokensByModel: {
+            "claude-opus-4-5-20251101": 999,
+          },
+        },
+      ],
+      modelUsage: {
+        "claude-opus-4-5-20251101": {
+          inputTokens: 30,
+          outputTokens: 10,
+          cacheReadInputTokens: 40,
+          cacheCreationInputTokens: 20,
+        },
+      },
+      totalSessions: 0,
+      totalMessages: 0,
+      hourCounts: {},
+      totalSpeculationTimeSavedMs: 0,
+    }),
+  );
+
+  const result = await runCli(
+    ["--claude", "--format", "json", "--output", outputPath],
+    {
+      CLAUDE_CONFIG_DIR: claudeConfig,
+    },
+  );
+
+  assert.equal(result.code, 0, result.stderr || result.stdout);
+
+  const payload = JSON.parse(readFileSync(outputPath, "utf8")) as {
+    providers: Array<{
+      provider: string;
+      daily: Array<{
+        date: string;
+        input: number;
+        output: number;
+        cache: { input: number; output: number };
+        total: number;
+        breakdown: Array<{
+          name: string;
+          tokens: {
+            input: number;
+            output: number;
+            cache: { input: number; output: number };
+            total: number;
+          };
+        }>;
+      }>;
+    }>;
+  };
+
+  assert.deepEqual(
+    payload.providers.map((provider) => provider.provider),
+    ["claude"],
+  );
+  assert.deepEqual(
+    payload.providers[0]?.daily.map((day) => ({
+      date: day.date,
+      input: day.input,
+      output: day.output,
+      cache: day.cache,
+      total: day.total,
+      model: day.breakdown[0]?.name,
+    })),
+    [
+      {
+        date: recentDate(4),
+        input: 70,
+        output: 30,
+        cache: { input: 40, output: 20 },
+        total: 100,
+        model: "claude-opus-4-5",
+      },
+      {
+        date: recentDate(2),
+        input: 6,
+        output: 4,
+        cache: { input: 0, output: 0 },
+        total: 10,
+        model: "claude-opus-4-5",
+      },
+    ],
+  );
+});
+
+test("Claude falls back to history.jsonl for activity-only days before token logs exist", async (t) => {
+  const workspace = createTempWorkspace("claude-history-fallback");
+
+  t.after(() => {
+    rmSync(workspace, { recursive: true, force: true });
+  });
+
+  const claudeConfig = join(workspace, "claude");
+  const outputPath = join(workspace, "out.json");
+
+  writeJsonFile(
+    join(claudeConfig, "history.jsonl"),
+    [
+      JSON.stringify({
+        timestamp: `${recentDate(6)}T08:00:00.000Z`,
+        sessionId: "s-1",
+      }),
+      JSON.stringify({
+        timestamp: `${recentDate(6)}T08:30:00.000Z`,
+        sessionId: "s-1",
+      }),
+      JSON.stringify({
+        timestamp: `${recentDate(5)}T09:00:00.000Z`,
+        sessionId: "s-2",
+      }),
+    ].join("\n"),
+  );
+
+  const result = await runCli(
+    ["--claude", "--format", "json", "--output", outputPath],
+    {
+      CLAUDE_CONFIG_DIR: claudeConfig,
+    },
+  );
+
+  assert.equal(result.code, 0, result.stderr || result.stdout);
+
+  const payload = JSON.parse(readFileSync(outputPath, "utf8")) as {
+    providers: Array<{
+      provider: string;
+      insights: {
+        streaks: {
+          longest: number;
+          current: number;
+        };
+      };
+      daily: Array<{
+        date: string;
+        total: number;
+        displayValue?: number;
+        breakdown: unknown[];
+      }>;
+    }>;
+  };
+
+  assert.deepEqual(
+    payload.providers[0]?.daily.map((day) => ({
+      date: day.date,
+      total: day.total,
+      displayValue: day.displayValue,
+      breakdownLength: day.breakdown.length,
+    })),
+    [
+      {
+        date: recentDate(6),
+        total: 0,
+        displayValue: 2,
+        breakdownLength: 0,
+      },
+      {
+        date: recentDate(5),
+        total: 0,
+        displayValue: 1,
+        breakdownLength: 0,
+      },
+    ],
+  );
+  assert.deepEqual(payload.providers[0]?.insights.streaks, {
+    longest: 0,
+    current: 0,
+  });
 });
 
 test("Claude fails clearly on oversized JSONL records via the shared splitter", async (t) => {
